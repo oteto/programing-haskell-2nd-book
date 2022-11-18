@@ -1,7 +1,7 @@
+-- p.139 - p.150
 import Data.Char (isDigit)
 import Data.List (transpose)
-
--- p.139 - p.150
+import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 
 size :: Int
 size = 3
@@ -121,13 +121,84 @@ run' g p
   | wins X g = putStrLn "🎉 Player X wins!\n"
   | full g = putStrLn "🙏 It's a draw!\n"
   | otherwise = do
-    i <- getNat (prompt p)
-    case move g i p of
-      [] -> do
-        putStrLn "ERROR: Invalid move 🤯"
-        run' g p
-      [g'] -> run g' (next p)
-      _ -> putStrLn "ERROR: Exception game 🔥"
+      i <- getNat (prompt p)
+      case move g i p of
+        [] -> do
+          putStrLn "ERROR: Invalid move 🤯"
+          run' g p
+        [g'] -> run g' (next p)
+        _ -> putStrLn "ERROR: Exception game 🔥"
 
 tictactoe :: IO ()
 tictactoe = run empty O
+
+data Tree a = Node a [Tree a] deriving (Show)
+
+-- | 次に遷移できるマスの構造のリストを返す
+moves :: Grid -> Player -> [Grid]
+moves g p
+  | won g = []
+  | full g = []
+  | otherwise = concat [move g i p | i <- [0 .. ((size ^ 2) - 1)]]
+
+-- | とりうる全てのマス配置木構造を返す
+gametree :: Grid -> Player -> Tree Grid
+gametree g p = Node g [gametree g' (next p) | g' <- moves g p]
+
+-- | 与えられた深さ以降の Node を削除する
+prune :: Int -> Tree a -> Tree a
+prune 0 (Node x _) = Node x []
+prune n (Node x ts) = Node x [prune (n - 1) t | t <- ts]
+
+-- | 木構造の最大の深さ
+depth :: Int
+depth = 9
+
+-- | 盤面の木構造の各 Node にプレイヤーのラベルを付与する
+minimax :: Tree Grid -> Tree (Grid, Player)
+minimax (Node g []) -- 葉の場合はその時点の勝者をラベルに設定する、いない場合は空をラベルに設定する
+  | wins O g = Node (g, O) []
+  | wins X g = Node (g, X) []
+  | otherwise = Node (g, B) []
+minimax (Node g ts) -- 節の場合は１階層下の子のラベルに対して、プレイヤーが O ならの最小値を、X の場合は最大値をラベルに設定する
+  | turn g == O = Node (g, minimum ps) ts'
+  | turn g == X = Node (g, maximum ps) ts'
+  where
+    ts' = map minimax ts
+    ps = [p | Node ((_, p)) _ <- ts']
+
+-- | 与えられた木構造の根と同じラベルの Node が最善手となる
+bestmove :: Grid -> Player -> Grid
+bestmove g p = head [g' | Node (g', p') _ <- ts, p' == best]
+  where
+    tree = prune depth (gametree g p)
+    Node (_, best) ts = minimax tree -- ts は１階層したの Node のリスト
+
+play :: Grid -> Player -> IO ()
+play g p = do
+  cls
+  goto (1, 1)
+  putGrid g
+  play' g p
+
+play' :: Grid -> Player -> IO ()
+play' g p
+  | wins O g = putStrLn "🎉 Player O wins!\n"
+  | wins X g = putStrLn "🎉 Player X wins!\n"
+  | full g = putStrLn "🙏 It's a draw!\n"
+  | p == O = do
+      i <- getNat (prompt p)
+      case move g i p of
+        [] -> do
+          putStrLn "ERROR: Invalid move 🤯"
+          play' g p
+        [g'] -> play g' (next p)
+        _ -> putStrLn "ERROR: Exception game 🔥"
+  | p == X = do
+      putStr "Player X is thinking..."
+      (play $! (bestmove g p)) (next p)
+
+main :: IO ()
+main = do
+  hSetBuffering stdout NoBuffering
+  play empty O
