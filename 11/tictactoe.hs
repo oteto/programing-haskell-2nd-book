@@ -121,13 +121,13 @@ run' g p
   | wins X g = putStrLn "🎉 Player X wins!\n"
   | full g = putStrLn "🙏 It's a draw!\n"
   | otherwise = do
-      i <- getNat (prompt p)
-      case move g i p of
-        [] -> do
-          putStrLn "ERROR: Invalid move 🤯"
-          run' g p
-        [g'] -> run g' (next p)
-        _ -> putStrLn "ERROR: Exception game 🔥"
+    i <- getNat (prompt p)
+    case move g i p of
+      [] -> do
+        putStrLn "ERROR: Invalid move 🤯"
+        run' g p
+      [g'] -> run g' (next p)
+      _ -> putStrLn "ERROR: Exception game 🔥"
 
 tictactoe :: IO ()
 tictactoe = run empty O
@@ -163,9 +163,10 @@ minimax (Node g []) -- 葉の場合はその時点の勝者をラベルに設定
 minimax (Node g ts) -- 節の場合は１階層下の子のラベルに対して、プレイヤーが O ならの最小値を、X の場合は最大値をラベルに設定する
   | turn g == O = Node (g, minimum ps) ts'
   | turn g == X = Node (g, maximum ps) ts'
+  | otherwise = Node (g, B) []
   where
     ts' = map minimax ts
-    ps = [p | Node ((_, p)) _ <- ts']
+    ps = [p | Node (_, p) _ <- ts']
 
 -- | 与えられた木構造の根と同じラベルの Node が最善手となる
 bestmove :: Grid -> Player -> Grid
@@ -187,16 +188,17 @@ play' g p
   | wins X g = putStrLn "🎉 Player X wins!\n"
   | full g = putStrLn "🙏 It's a draw!\n"
   | p == O = do
-      i <- getNat (prompt p)
-      case move g i p of
-        [] -> do
-          putStrLn "ERROR: Invalid move 🤯"
-          play' g p
-        [g'] -> play g' (next p)
-        _ -> putStrLn "ERROR: Exception game 🔥"
+    i <- getNat (prompt p)
+    case move g i p of
+      [] -> do
+        putStrLn "ERROR: Invalid move 🤯"
+        play' g p
+      [g'] -> play g' (next p)
+      _ -> putStrLn "ERROR: Exception game 🔥"
   | p == X = do
-      putStr "Player X is thinking..."
-      (play $! (bestmove g p)) (next p)
+    putStr "Player X is thinking..."
+    (play $! bestmove g p) (next p)
+  | otherwise = putStrLn "ERROR: Exception game 🔥"
 
 main :: IO ()
 main = do
